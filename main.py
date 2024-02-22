@@ -5,7 +5,6 @@ from matplotlib import pyplot as plt
 def convolve(img, kernel):
     (rows, columns) = img.shape
     kernelSize = kernel.shape[0]
-    kernelElements = kernelSize * kernelSize
     # pad array
     resultImg = np.empty(shape=(rows, columns), dtype=np.uint8)
     padSize = int((kernelSize - 1) / 2)
@@ -17,20 +16,29 @@ def convolve(img, kernel):
             # Get kernel sized slice
             imgSlice = intermediate[rowI - padSize:rowI + padSize + 1, columnI - padSize:columnI + padSize + 1]
             mulRes = np.multiply(imgSlice, kernel)
-            # take absolute to prevent negative values
-            # clamp to max pixel value
-            resultVal = min(abs(np.sum(mulRes)), 255)
-            resultImg[rowI - padSize, columnI - padSize] = resultVal
+            resultImg[rowI - padSize, columnI - padSize] = mulRes
     return resultImg
 
-def getGradientMagnitude(horizontalEdges, verticalEdges):
+def threshold(img, threshold):
+    MAX_VAL = 255
+    MIN_VAL = 0
+    (rows, columns) = img.shape
+    resultImg = np.empty(img.shape, dtype=np.uint8)
+    for rowI in range(rows):
+        for columnI in range(columns):
+            val = img[rowI][columnI]
+            resultImg[rowI][columnI] = MAX_VAL if val >= threshold else MIN_VAL
+            
+    
+
+def getGradientMagnitudes(horizontalEdges, verticalEdges):
     resultImg = np.empty(shape=horizontalEdges.shape, dtype=np.uint8)
     (rows, columns) = horizontalEdges.shape
     for rowI in range(rows):
         for columnI in range(columns):
             horizontalMagnitude = horizontalEdges[rowI][columnI]
             verticalMagnitude = verticalEdges[rowI][columnI]
-            resultImg[rowI][columnI] = sqrt(horizontalMagnitude ** 2 + verticalMagnitude ** 2)
+            resultImg[rowI][columnI] = min(255, sqrt(horizontalMagnitude ** 2 + verticalMagnitude ** 2))
     return resultImg
 
 def showHistogram(img):
@@ -42,6 +50,31 @@ def showHistogram(img):
     plt.xlabel('Grey Level')
     plt.show()
 
+def getEdges(useWeighted = False):
+    prewitHorizontalKernel = np.asanyarray([
+        [-1, 0, 1],
+        [-1, 0, 1],
+        [-1, 0, 1 ]
+    ], dtype=np.float32)
+    prewitVerticalKernel = np.asanyarray([
+        [-1, -1, -1],
+        [0, 0, 0],
+        [1, 1, 1 ]
+    ], dtype=np.float32)
+    sobelHorizontalKernel = np.asanyarray([
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1 ]
+    ], dtype=np.float32)
+    sobelVerticalKernel = np.asanyarray([
+        [-1, -2, -1],
+        [0, 0, 0],
+        [1, 2, 1 ]
+    ], dtype=np.float32)
+    horizontalEdges = convolve(img, prewitHorizontalKernel)
+    horizontalEdges = np.maximum(np.abs(horizontalEdges, dtype=np.uint8), np.full(horizontalEdges.shape, 255, dtype=np.uint8))
+    verticalEdges = convolve(img, prewitVerticalKernel)
+
 def main ():
     input_file = 'kitty.bmp'
     img = cv2.imread(input_file, cv2.IMREAD_GRAYSCALE)
@@ -49,30 +82,21 @@ def main ():
     if img is None:
         print('Failed to open', input_file)
         return
-    prewitHorizontalKernel = np.asanyarray([
-        [-1, 0, 1],
-        [-2, 0, 2],
-        [-1, 0, 1 ]
-    ], dtype=np.float32)
-    prewitVerticalKernel = np.asanyarray([
-        [-1, -2, -1],
-        [0, 0, 0],
-        [1, 2, 1 ]
-    ], dtype=np.float32)
-    horizontalEdges = convolve(img, prewitHorizontalKernel)
-    verticalEdges = convolve(img, prewitVerticalKernel)
+    
+    
     edgeMagnitudes = getGradientMagnitude(horizontalEdges, verticalEdges)
     windowName1 = "Display"
     windowName2 = "Display2"
     cv2.namedWindow(windowName1, cv2.WINDOW_NORMAL)
     cv2.namedWindow(windowName2, cv2.WINDOW_NORMAL)
-    thresholded = cv2.adaptiveThreshold(edgeMagnitudes, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, -50)
+    thresholded = threshold(edgeMagnitudes, 140)
+    thresholded.dtype = np.uint8
     while True:
         if cv2.waitKey(1) == ord(' '):
             break
 
-    cv2.imshow(windowName1, edgeMagnitudes)
-    cv2.imshow(windowName2, thresholded)
+    cv2.imshow(windowName1, horizontalEdges)
+    cv2.imshow(windowName2, verticalEdges)
     showHistogram(edgeMagnitudes)
     cv2.destroyAllWindows()
     
